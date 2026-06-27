@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single File ERP/POS Demo</title>
+    <style>
+        /* All CSS is embedded directly in the HTML file */
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        h1, h2 { color: #0056b3; }
+        .container { display: flex; gap: 20px; flex-wrap: wrap; }
+        .module { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; min-width: 300px; }
+        input[type="text"], input[type="number"], button, select { padding: 8px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ddd; }
+        button { background-color: #007bff; color: white; cursor: pointer; border: none; }
+        button:hover { background-color: #0056b3; }
+        ul { list-style-type: none; padding: 0; }
+        li { background-color: #e9ecef; margin-bottom: 5px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+        li button { margin-left: 10px; background-color: #dc3545; }
+        li button:hover { background-color: #c82333; }
+        .cart-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .cart-item span { flex-grow: 1; }
+        .cart-item button { background-color: #ffc107; color: #333; }
+        .cart-item button:hover { background-color: #e0a800; }
+        #totalAmount { font-weight: bold; font-size: 1.2em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Single File ERP & POS System Demo</h1>
+    <p>This example demonstrates how a basic ERP (Inventory) and POS (Sales) system can be implemented within a single HTML file, using client-side JavaScript and local storage for data persistence.</p>
+
+    <div class="container">
+        <!-- ERP Module: Inventory Management -->
+        <div class="module">
+            <h2>Inventory Management (ERP)</h2>
+            <h3>Add New Product</h3>
+            <input type="text" id="productName" placeholder="Product Name">
+            <input type="number" id="productPrice" placeholder="Price" min="0.01" step="0.01">
+            <input type="number" id="productStock" placeholder="Stock" min="0">
+            <button onclick="addProduct()">Add Product</button>
+
+            <h3>Current Inventory</h3>
+            <ul id="inventoryList"></ul>
+        </div>
+
+        <!-- POS Module: Point of Sale -->
+        <div class="module">
+            <h2>Point of Sale (POS)</h2>
+            <h3>Select Products</h3>
+            <select id="posProductSelect" onchange="updateProductPrice()">
+                <option value="">-- Select a product --</option>
+            </select>
+            <input type="number" id="posQuantity" value="1" min="1">
+            <button onclick="addToCart()">Add to Cart</button>
+
+            <h3>Shopping Cart</h3>
+            <div id="cartItems"></div>
+            <p id="totalAmount">Total: $0.00</p>
+            <button onclick="checkout()">Checkout</button>
+        </div>
+
+        <!-- Simple Transaction Log (part of ERP/Reporting) -->
+        <div class="module">
+            <h2>Sales Transactions</h2>
+            <ul id="transactionList"></ul>
+        </div>
+    </div>
+
+    <script>
+        // All JavaScript is embedded directly in the HTML file
+
+        // Data storage using localStorage to persist data across sessions
+        let products = JSON.parse(localStorage.getItem('products')) || [];
+        let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+        let cart = [];
+
+        function saveProducts() { localStorage.setItem('products', JSON.stringify(products)); }
+        function saveTransactions() { localStorage.setItem('transactions', JSON.stringify(transactions)); }
+
+        // ERP: Inventory Management Functions
+        function addProduct() {
+            const name = document.getElementById('productName').value;
+            const price = parseFloat(document.getElementById('productPrice').value);
+            const stock = parseInt(document.getElementById('productStock').value);
+
+            if (name && !isNaN(price) && price > 0 && !isNaN(stock) && stock >= 0) {
+                products.push({ id: Date.now(), name, price, stock });
+                saveProducts();
+                renderInventory();
+                renderPOSProductSelect(); // Update POS product list
+                document.getElementById('productName').value = '';
+                document.getElementById('productPrice').value = '';
+                document.getElementById('productStock').value = '';
+            } else {
+                alert('Please enter valid product details.');
+            }
+        }
+
+        function deleteProduct(id) {
+            products = products.filter(p => p.id !== id);
+            saveProducts();
+            renderInventory();
+            renderPOSProductSelect();
+        }
+
+        function renderInventory() {
+            const inventoryList = document.getElementById('inventoryList');
+            inventoryList.innerHTML = '';
+            products.forEach(product => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span>${product.name} - $${product.price.toFixed(2)} (Stock: ${product.stock})</span>
+                    <button onclick="deleteProduct(${product.id})">Delete</button>
+                `;
+                inventoryList.appendChild(li);
+            });
+        }
+
+        // POS: Point of Sale Functions
+        function renderPOSProductSelect() {
+            const select = document.getElementById('posProductSelect');
+            select.innerHTML = '<option value="">-- Select a product --</option>';
+            products.forEach(product => {
+                if (product.stock > 0) { // Only show in-stock items for POS
+                    const option = document.createElement('option');
+                    option.value = product.id;
+                    option.textContent = `${product.name} ($${product.price.toFixed(2)})`;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        function updateProductPrice() {
+            // This function could be expanded to show selected product's price or stock info
+            // For this demo, it primarily triggers a re-render if needed, or can be left empty.
+        }
+
+        function addToCart() {
+            const productId = parseInt(document.getElementById('posProductSelect').value);
+            const quantity = parseInt(document.getElementById('posQuantity').value);
+
+            if (!productId || isNaN(quantity) || quantity <= 0) {
+                alert('Please select a product and enter a valid quantity.');
+                return;
+            }
+
+            const product = products.find(p => p.id === productId);
+            if (!product) { alert('Product not found.'); return; }
+            if (product.stock < quantity) { alert(`Not enough stock for ${product.name}. Available: ${product.stock}`); return; }
+
+            const existingCartItem = cart.find(item => item.id === productId);
+            if (existingCartItem) {
+                existingCartItem.quantity += quantity;
+            } else {
+                cart.push({ id: productId, name: product.name, price: product.price, quantity: quantity });
+            }
+            renderCart();
+        }
+
+        function removeFromCart(id) {
+            cart = cart.filter(item => item.id !== id);
+            renderCart();
+        }
+
+        function renderCart() {
+            const cartItemsDiv = document.getElementById('cartItems');
+            cartItemsDiv.innerHTML = '';
+            let total = 0;
+
+            cart.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                const div = document.createElement('div');
+                div.className = 'cart-item';
+                div.innerHTML = `
+                    <span>${item.name} x ${item.quantity} - $${itemTotal.toFixed(2)}</span>
+                    <button onclick="removeFromCart(${item.id})">Remove</button>
+                `;
+                cartItemsDiv.appendChild(div);
+            });
+            document.getElementById('totalAmount').textContent = `Total: $${total.toFixed(2)}`;
+        }
+
+        function checkout() {
+            if (cart.length === 0) {
+                alert('Cart is empty!');
+                return;
+            }
+
+            // Deduct stock and record transaction
+            const saleItems = [];
+            let totalSaleAmount = 0;
+
+            for (const cartItem of cart) {
+                const product = products.find(p => p.id === cartItem.id);
+                if (product) {
+                    product.stock -= cartItem.quantity; // Update stock in ERP module
+                    saleItems.push({ name: product.name, price: product.price, quantity: cartItem.quantity });
+                    totalSaleAmount += (product.price * cartItem.quantity);
+                }
+            }
+
+            transactions.push({
+                id: Date.now(),
+                date: new Date().toLocaleString(),
+                items: saleItems,
+                total: totalSaleAmount
+            });
+
+            saveProducts();
+            saveTransactions();
+            renderInventory();
+            renderPOSProductSelect();
+            renderTransactions();
+
+            cart = []; // Clear cart after checkout
+            renderCart();
+            alert('Checkout successful!');
+        }
+
+        // Reporting: Transaction Log Functions
+        function renderTransactions() {
+            const transactionList = document.getElementById('transactionList');
+            transactionList.innerHTML = '';
+            transactions.forEach(transaction => {
+                const li = document.createElement('li');
+                const itemsHtml = transaction.items.map(item => `${item.name} x ${item.quantity}`).join(', ');
+                li.innerHTML = `
+                    <span><strong>${transaction.date}</strong>: ${itemsHtml} (Total: $${transaction.total.toFixed(2)})</span>
+                `;
+                transactionList.appendChild(li);
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderInventory();
+            renderPOSProductSelect();
+            renderCart();
+            renderTransactions();
+        });
+    </script>
+</body>
+</html>
